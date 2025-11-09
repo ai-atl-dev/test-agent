@@ -72,19 +72,32 @@ gcloud run services update koozie-agent-service \
 The Cloud Build service account (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`) needs:
 
 **Required Roles:**
+- `roles/artifactregistry.writer` - ✅ **CRITICAL** - To push Docker images to Artifact Registry
 - `roles/run.admin` - To deploy to Cloud Run
 - `roles/iam.serviceAccountUser` - To use the Cloud Run service account
-- `roles/storage.admin` - To push to Artifact Registry (usually auto-granted)
 
 **Grant permissions:**
 
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe heyai-backend --format="value(projectNumber)")
 
+# CRITICAL: Grant Artifact Registry Writer (required for pushing images)
+gcloud artifacts repositories add-iam-policy-binding test-agent \
+  --location=us-central1 \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+
+# Or grant at project level (applies to all repos)
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+
+# Grant Cloud Run Admin (for deployment)
 gcloud projects add-iam-policy-binding heyai-backend \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
   --role="roles/run.admin"
 
+# Grant Service Account User (to use Cloud Run service account)
 gcloud projects add-iam-policy-binding heyai-backend \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
   --role="roles/iam.serviceAccountUser"
@@ -127,7 +140,8 @@ _SERVICE_NAME = koozie-agent-service
 
 Before your first deployment, ensure:
 
-- [ ] Artifact Registry repository `test-agent` exists in `us-central1`
+- [ ] Artifact Registry repository `test-agent` exists in `us-central1` ✅
+- [ ] Cloud Build service account has `roles/artifactregistry.writer` ✅ **CRITICAL**
 - [ ] Cloud Build service account has `roles/run.admin` and `roles/iam.serviceAccountUser`
 - [ ] Cloud Run service account has `roles/aiplatform.user` (or use default with this role)
 - [ ] Vertex AI API is enabled in your project
