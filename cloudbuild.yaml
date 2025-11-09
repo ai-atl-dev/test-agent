@@ -1,0 +1,87 @@
+# cloudbuild.yaml
+# Builds and pushes Docker image to Artifact Registry for Cloud Run deployment
+# Trigger: test-agent should be configured to use this file.
+
+substitutions:
+  _REGION: "us-central1"
+  _REPO_NAME: "test-agent"
+  _IMAGE_NAME: "koozie-agent"
+  _SERVICE_NAME: "koozie-agent-service"
+
+steps:
+  # 0) Warm the Docker build cache by pulling the previously pushed image (if any)
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -e
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}
+        docker pull $$IMAGE_URI:latest || true
+
+  # 1) Build the image with remote cache
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    env:
+      - DOCKER_BUILDKIT=1
+      - BUILDKIT_INLINE_CACHE=1
+    args:
+      - -c
+      - |
+        set -e
+        TAG=${SHORT_SHA:-$BUILD_ID}
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}
+        docker build --pull \
+          --cache-from $$IMAGE_URI:latest \
+          -t $$IMAGE_URI:$$TAG \
+          -t $$IMAGE_URI:latest \
+          -f Dockerfile \
+          .
+
+  # 2) Push both the commit tag and latest to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -e
+        TAG=${SHORT_SHA:-$BUILD_ID}
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}
+        docker push $$IMAGE_URI:$$TAG
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest
+
+  # 3) Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest
+        
+        # Deploy to Cloud Run (or update if exists)
+        gcloud run deploy ${_SERVICE_NAME} \
+          --image=$$IMAGE_URI \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --port=8080 \
+          --memory=512Mi \
+          --cpu=1 \
+          --timeout=300 \
+          --max-instances=10 \
+          --set-env-vars="GCP_PROJECT_ID=$PROJECT_ID,VERTEX_AI_LOCATION=${_REGION},VERTEX_AI_MODEL=gemini-2.5-flash" \
+          --quiet
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest
+
+timeout: "1800s"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
