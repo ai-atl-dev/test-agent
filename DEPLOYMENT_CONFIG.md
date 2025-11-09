@@ -69,7 +69,13 @@ gcloud run services update koozie-agent-service \
 
 ### 3. Cloud Build Service Account Permissions
 
-The Cloud Build service account (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`) needs:
+**IMPORTANT:** Cloud Build may use either:
+- `PROJECT_NUMBER@cloudbuild.gserviceaccount.com` (Cloud Build service account), OR
+- `PROJECT_NUMBER-compute@developer.gserviceaccount.com` (Compute Engine default service account)
+
+**Grant permissions to BOTH** to ensure builds work regardless of configuration:
+
+The service accounts need:
 
 **Required Roles:**
 - `roles/artifactregistry.writer` - ✅ **CRITICAL** - To push Docker images to Artifact Registry
@@ -81,26 +87,46 @@ The Cloud Build service account (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe heyai-backend --format="value(projectNumber)")
 
-# CRITICAL: Grant Artifact Registry Writer (required for pushing images)
+# CRITICAL: Grant Artifact Registry Writer to BOTH service accounts
+# Cloud Build service account
 gcloud artifacts repositories add-iam-policy-binding test-agent \
   --location=us-central1 \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
   --role="roles/artifactregistry.writer"
 
+# Compute Engine default service account (may be used by Cloud Build)
+gcloud artifacts repositories add-iam-policy-binding test-agent \
+  --location=us-central1 \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+
 # Or grant at project level (applies to all repos)
 gcloud projects add-iam-policy-binding heyai-backend \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-  --role="roles/artifactregistry.writer"
+  --role="roles/artifactregistry.writer" \
+  --condition=None
 
-# Grant Cloud Run Admin (for deployment)
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer" \
+  --condition=None
+
+# Grant Cloud Run Admin (for deployment) - BOTH accounts
 gcloud projects add-iam-policy-binding heyai-backend \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-  --role="roles/run.admin"
+  --role="roles/run.admin" \
+  --condition=None
+
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/run.admin" \
+  --condition=None
 
 # Grant Service Account User (to use Cloud Run service account)
 gcloud projects add-iam-policy-binding heyai-backend \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-  --role="roles/iam.serviceAccountUser"
+  --role="roles/iam.serviceAccountUser" \
+  --condition=None
 ```
 
 ---
