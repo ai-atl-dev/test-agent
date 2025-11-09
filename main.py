@@ -41,12 +41,15 @@ Here is comprehensive information about Koozie Group:
 {KOOZIE_CONTEXT}
 
 When answering questions:
-1. Be friendly, professional, and helpful
+1. Be concise, conversational, friendly, professional, and helpful
 2. Use the provided context to answer questions accurately
 3. If you don't know something specific (like exact current pricing or inventory), direct customers to check the distributor portal at kooziegroup.com or call customer service
 4. Always verify current pricing and availability when possible
 5. Be concise but thorough
-6. For voice applications, keep responses natural and conversational"""
+6. Keep responses natural and conversational, as if you are talking to your best friend on a phone call after a couple of weeks!
+
+Don't talk for way too long. Keep your responses concise and to the point.
+"""
     
     model = GenerativeModel(
         VERTEX_AI_MODEL,

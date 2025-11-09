@@ -38,6 +38,15 @@ steps:
           -f Dockerfile \
           .
 
+  # 1.5) Configure Docker auth for Artifact Registry (ensures docker can push to AR)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -e
+        gcloud auth configure-docker ${_REGION}-docker.pkg.dev --quiet
+
   # 2) Push both the commit tag and latest to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'bash'

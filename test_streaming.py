@@ -8,7 +8,7 @@ import sys
 import time
 
 def test_streaming():
-    url = "http://localhost:8080/chat"
+    url = "https://koozie-agent-service-127756525541.us-central1.run.app/chat"
     
     # Get message from command line or use default
     message = sys.argv[1] if len(sys.argv) > 1 else "Tell me about Koozie Group's product categories."

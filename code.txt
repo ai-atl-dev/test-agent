@@ -1,0 +1,1638 @@
+# cloudbuild.yaml
+# Builds and pushes Docker image to Artifact Registry for Cloud Run deployment
+# Trigger: test-agent should be configured to use this file.
+
+substitutions:
+  _REGION: "us-central1"
+  _REPO_NAME: "test-agent"
+  _IMAGE_NAME: "koozie-agent"
+  _SERVICE_NAME: "koozie-agent-service"
+
+steps:
+  # 0) Warm the Docker build cache by pulling the previously pushed image (if any)
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -e
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}
+        docker pull $$IMAGE_URI:latest || true
+
+  # 1) Build the image with remote cache
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    env:
+      - DOCKER_BUILDKIT=1
+      - BUILDKIT_INLINE_CACHE=1
+    args:
+      - -c
+      - |
+        set -e
+        TAG=${SHORT_SHA:-$BUILD_ID}
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}
+        docker build --pull \
+          --cache-from $$IMAGE_URI:latest \
+          -t $$IMAGE_URI:$$TAG \
+          -t $$IMAGE_URI:latest \
+          -f Dockerfile \
+          .
+
+  # 1.5) Configure Docker auth for Artifact Registry (ensures docker can push to AR)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -e
+        gcloud auth configure-docker ${_REGION}-docker.pkg.dev --quiet
+
+  # 2) Push both the commit tag and latest to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -e
+        TAG=${SHORT_SHA:-$BUILD_ID}
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}
+        docker push $$IMAGE_URI:$$TAG
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest
+
+  # 3) Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE_URI=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest
+        
+        # Deploy to Cloud Run (or update if exists)
+        gcloud run deploy ${_SERVICE_NAME} \
+          --image=$$IMAGE_URI \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --port=8080 \
+          --memory=512Mi \
+          --cpu=1 \
+          --timeout=300 \
+          --max-instances=10 \
+          --set-env-vars="GCP_PROJECT_ID=$PROJECT_ID,VERTEX_AI_LOCATION=${_REGION},VERTEX_AI_MODEL=gemini-2.5-flash" \
+          --quiet
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest
+
+timeout: "1800s"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Koozie Group Product Catalog & Customer Support Guide
+
+## Company Overview
+
+**Koozie Group** is one of the largest suppliers in the promotional products industry with:
+- **$304 million** in revenue (2024)
+- **2,500+ orders** processed daily across US facilities
+- **40+ brands** across 10+ product categories
+- **1,900+ products** in their catalog
+- Ranked #11 in the PPAI 100 (2025)
+
+### Recent Developments (2025)
+- Acquired by Mill Point Capital (April 2025)
+- Merged with Garyline (April 2025)
+- Completed integration with IMAGEN Brands
+
+### Industry Portal Numbers
+- **ASI:** 40480 (US), 40481 (CAN)
+- **PPAI:** 114187
+- **PPPC:** 560705
+- **SAGE:** 57550
+- **UPIC:** KOOZIEGP
+
+---
+
+## Product Categories
+
+### 1. **Writing Instruments & Pens**
+- BIC® branded pens (exclusive promotional supplier in US/Canada)
+- Classic Collection pens (assembled in USA)
+- Over 200+ color combinations available
+- Souvenir® mechanical pencils
+
+**Top Sellers:**
+- BIC® Clic Stic® Pen: **$0.28 ea.** (min order applies)
+- BIC® Round Stic® Pen: **$0.31 ea.**
+- Dart Pen: **$0.26 ea.**
+- Contender Pen: **$0.25 ea.**
+- BIC® Intensity Clic Gel Pen: **$1.64 ea.**
+
+**Features:**
+- "WRITES FIRST TIME, EVERY TIME!®" guarantee on BIC products
+- Free standard shipping promotion on most styles (check current promos)
+- Large order production available
+- 8 carbon-neutral certified pens available
+
+### 2. **Calendars**
+Brands: **Triumph®, HotLine® Products, Skinner & Kennedy™**
+
+**Types:**
+- Wall calendars (11" x 18.5" to 17" x 23")
+- Desk calendars (6" x 4.5" to 7.5" x 6.5")
+- Span-A-Year calendars
+- Desk pad calendars
+- Press-N-Stick calendar magnets
+
+**Pricing Examples:**
+- Econo Desk Calendar (2026): **$1.19-$1.53 ea.**
+- Press-N-Stick Calendar Magnets: **$0.74 ea.**
+- American Splendor Wall Calendar: **$2.73 ea.**
+- Time Management Span-A-Year: **$2.67-$6.22 ea.**
+
+**Popular Themes:**
+- American landscapes
+- Western frontier
+- Motivational quotes
+- Native American art
+
+### 3. **Drinkware**
+Brands: **Koozie®, Tervis®, Silipint®, Coleman®**
+
+**Product Lines:**
+- Can coolers & koozies
+- Tumblers (stainless steel & insulated)
+- Coffee mugs (ceramic & sublimation)
+- Water bottles (aluminum & stainless steel)
+- Stadium cups
+- Travel mugs
+
+**Pricing Examples:**
+- Koozie® Tall Cup Cooler: **$1.52 ea.**
+- Budget Coffee Mug (11 oz): **$1.40-$1.89 ea.**
+- Dye Sublimation Mug (15 oz): **$3.74 ea.**
+
+**Key Features:**
+- Best-in-class insulation
+- BPA-free options
+- Dishwasher/microwave safe options
+- Full-color imprint capabilities
+
+### 4. **Bags**
+Brands: **Atchison®, KAPSTON®**
+
+**Types:**
+- Tote bags
+- Backpacks (including cooler backpacks)
+- Drawstring bags
+- Duffel bags
+- Grocery totes
+- Laptop/messenger bags
+
+**Pricing Examples:**
+- Grocery Tote: **$1.24 ea.** (8.63" x 12.75" x 12.25")
+- TranSport It Tote: **$6.90 ea.**
+- Koozie® Boho RPET Cooler Backpack: Premium pricing
+
+**Sustainability:**
+- Many made from recycled PET (RPET)
+- Heathered RPET non-woven options available
+
+### 5. **Sticky Notes & Notepads**
+Brand: **Souvenir® Sticky Note™**
+- Printed in Sleepy Eye, Minnesota
+
+**Products:**
+- Adhesive sticky notes (3" x 3", 4" x 3", 4" x 6")
+- Non-adhesive scratch pads (various sizes)
+- Die-cut custom shapes available
+- 25-sheet and 50-sheet options
+
+**Pricing Examples:**
+- 3" x 3" Sticky Note Pad (25 sheets): **$0.20 ea.**
+- 4" x 3" Sticky Note Pad (25 sheets): **$0.27 ea.**
+- 4" x 6" Sticky Note (25 sheets): **$0.71 ea.**
+- 5" x 7" Scratch Pad (50 sheets): **$0.85 ea.**
+
+**Features:**
+- Full-color imprint available
+- Custom die-cut shapes
+- Large order production available
+
+### 6. **Outdoor & Leisure**
+Brands: **Coleman®, GCI Outdoor®, Koozie®, Tervis®**
+
+**Products:**
+- Camping gear
+- Coolers (soft & hard-sided)
+- Chairs (camping & stadium)
+- Blankets
+- Outdoor tools
+
+**Special Brand Offerings:**
+- **Leatherman®** multi-tools (Portland, Oregon manufactured)
+- **ORCA™** hard-sided coolers
+- **FlexiFreeze®** coolers with built-in ice
+
+### 7. **Golf Products**
+Brands: **Callaway®, Titleist®**
+
+**Products:**
+- Golf balls
+- Golf accessories
+- Golf towels
+- Divot tools
+- Tees
+
+**Note:** Callaway and Titleist are premium retail-brand partners
+
+### 8. **Hats & Headwear**
+
+**Types:**
+- Baseball caps
+- Trucker caps
+- Visors
+
+**Pricing Examples:**
+- Front Runner Cap: **$3.66 ea.**
+- Pro Lite Deluxe Cap: **$4.02 ea.**
+
+**Features:**
+- Various materials (cotton, polyester blends)
+- Embroidery and screen print decoration
+- Adjustable closures
+
+### 9. **Health, Wellness & Safety**
+Brand: **PrevaGuard™**
+
+**Products:**
+- Hand sanitizer (spray pump bottles)
+- Health & safety items
+- Pill boxes
+
+**Pricing Example:**
+- Hand Sanitizer Spray Pump: **$1.59 ea.**
+
+### 10. **Technology & Office**
+
+**Products:**
+- Wireless power banks (10,000 mAh): **~$10+ ea.**
+- Stylus pens
+- Mouse pads
+- Phone accessories
+
+### 11. **Magnets**
+
+**Types:**
+- Business card magnets: **$0.12 ea.**
+- Circle magnets (3"): **$0.18 ea.**
+- Square magnets (3" x 3"): **$0.18 ea.**
+- Calendar magnets: **$0.44-$0.74 ea.**
+
+### 12. **Umbrellas**
+Brands: **Shed Rain™, GoGo® by Shed Rain™**
+
+**Example:**
+- Shed Rain Pathfinder Auto Open Stick Umbrella: **$9.18 ea.**
+
+**Current Promotion:** 65% off select umbrellas (check for current availability)
+
+### 13. **Plush Toys**
+Brands: **Aurora™, Chelsea Teddy Bear™, Paws N Claws®**
+
+**Features:**
+- High-quality materials
+- Soft, rich fabric
+- Custom branding options
+
+### 14. **Tools & Accessories**
+- **Leatherman®** multi-tools (professional-grade)
+- Tape measures: **$14.94 ea.** (25' Gripper Tape Measure)
+- Flashlights
+- Keychains: **$1.31 ea.** (Pop Bubbles Keychain)
+
+### 15. **Planners & Organizers**
+- Monthly/weekly planners: **$9.41 ea.**
+- Classic planners: **$2.68 ea.**
+- Notebooks with pen: **$2.82 ea.**
+- Paper folders: **$1.08-$1.40 ea.**
+
+---
+
+## Major Brand Partnerships
+
+### Exclusive Partnerships:
+1. **BIC®** - Exclusive promotional products supplier (US/Canada)
+2. **Tervis®** - Exclusive promotional products partner
+3. **FOAM™** - Featured on Shark Tank (Nov 2024)
+4. **Garyline®** - American-made products (20+ items)
+
+### Retail Brand Partners:
+- Coleman®
+- Callaway®
+- Titleist®
+- Leatherman®
+- GCI Outdoor®
+- SCX Innovative Design™
+- Shed Rain™
+
+### House Brands:
+- Koozie® (signature brand - can coolers, drinkware)
+- KAPSTON® (lifestyle bags)
+- Atchison® (trendy bags - 100+ year history)
+- Souvenir® (sticky notes & notepads)
+- Triumph® (calendars)
+- The Viking Collection® (drinkware)
+- HotLine® Products (calendars since 1994)
+- Good Value™ (budget-friendly options)
+- Skinner & Kennedy™ (fans, calendars)
+
+---
+
+## Decoration & Customization Methods
+
+### Available Methods:
+1. **Screen Printing**
+2. **Pad Printing**
+3. **Heat Transfer**
+4. **Embroidery**
+5. **Laser Engraving**
+6. **Dye Sublimation**
+7. **Full-Color Digital Printing**
+8. **Debossing/Embossing**
+9. **britePix® Technology** (full-color photo-quality)
+
+### Standard Imprint Colors:
+- Aligned colors across all product lines post-IMAGEN integration
+- Over 200+ color combinations for select pens
+- PMS color matching available
+
+---
+
+## Production & Lead Times
+
+### Standard Production Times:
+- **24-Hour Service** available on select items
+- Rush service options vary by product
+- Most standard orders: 7-10 business days after proof approval
+- Calendar early-order pricing (order early for best rates)
+
+### Large Order Production:
+Available on select categories:
+- Writing instruments
+- Magnets
+- Notepads
+- Bags
+
+---
+
+## Sustainability Initiatives
+
+### "Keep It. Give It.™" Program
+**Key Pillars:**
+1. Environmental stewardship
+2. Social responsibility
+3. Supply chain security
+
+### Achievements:
+- **8 carbon-neutral certified pens** (2024)
+- **75%** of 100+ new annual products have sustainability stance
+- **EcoVadis Committed Badge** (July 2024)
+- Goal: All domestically manufactured items to be carbon-neutral certified
+- Working toward full Scope 3 emissions neutrality
+
+### Eco-Friendly Product Lines:
+- **RPET** (Recycled PET) products
+- **SproutWorld®** plantable pencils
+- FSC®-certified paper products
+- Bamboo products
+
+### USA Manufacturing:
+- **750+ products** made, printed, or assembled in USA
+- Manufacturing facilities in:
+  - Clearwater, Florida (pens, calendars)
+  - Sleepy Eye, Minnesota (sticky notes)
+  - Multiple other US locations
+
+---
+
+## Ordering Information
+
+### Minimum Order Quantities:
+- Vary by product (typically 24-250 pieces)
+- Check individual product pages for specifics
+
+### Pricing Tiers:
+Prices decrease with quantity. Typical tiers:
+- 250 pieces
+- 500 pieces
+- 1,000 pieces
+- 2,500 pieces
+- 5,000+ pieces
+
+### Free Services (for Distributors):
+1. Virtual spec samples
+2. Free standard shipping on most writing instruments (promotional)
+3. Artwork upload tools
+4. Order tracking via **Koozie Group Tracker™**
+5. White glove concierge service (orders $10,000+)
+6. PromoStandards integration
+
+### Additional Charges May Apply For:
+- Optional decoration methods
+- Additional imprint locations
+- Rush production
+- Special packaging
+- PMS color matching
+
+---
+
+## Customer Support Resources
+
+### Key Tools for Distributors:
+
+1. **Website:** kooziegroup.com
+   - Product search & filtering
+   - Virtual spec samples
+   - Safety database search
+   - Order status tracking
+
+2. **Koozie Group Tracker™**
+   - One-stop order status
+   - Real-time updates
+   - Proof approvals
+
+3. **PromoStandards Integration**
+   - Automated order processing
+   - Real-time inventory
+   - Product data feeds
+
+4. **Technology Enhancements (2025):**
+   - Website chat
+   - Text messaging support
+   - **Kai** AI assistant
+
+### Catalogs Available:
+
+**Main Catalogs:**
+- 2025 Koozie Group Catalog (expires Jan 23, 2026)
+- 2026 Calendar Catalog
+- 2025 Gift Guide
+- The Mighty Pen catalog
+- Customization & Sourcing Made Easy guide
+
+**Format:** 
+- PDF downloads (distributor login required)
+- ZOOMcatalog customizable versions
+- Flipbook digital catalogs
+
+### Ordering Channels:
+1. Website (kooziegroup.com)
+2. PromoStandards
+3. Phone orders
+4. Email orders
+5. Industry portals (ASI, SAGE, PPAI)
+
+---
+
+## Product Safety & Compliance
+
+### Certifications & Standards:
+- Industry-leading product safety standards
+- Social responsibility compliance
+- Supply chain security protocols
+- Safety Search database (distributor access)
+
+### Testing:
+- Third-party testing on products
+- Compliance with promotional products industry standards
+- Material safety documentation available
+
+---
+
+## Current Promotions & Specials
+
+### Active Programs (Check for Current Dates):
+
+1. **The Real Deals** (Through Dec 31, 2025)
+   - Up to 35% savings
+   - No promo code needed
+   - Popular items included
+
+2. **NAMEIT25** - Free Personalization
+   - Select products
+   - Limited time offer
+
+3. **BONUS25** - Free Gift Promo
+   - Bonus items with qualifying orders
+
+4. **Closeouts & Overstock**
+   - Deep discounts while supplies last
+   - Color-specific pricing on some items
+
+5. **Web-Only Specials** (Quarterly)
+   - Q3-Q4 2025 specials
+   - 65+ items
+
+6. **Writing Instruments**
+   - Free standard shipping (code: FREEFR8WI)
+   - Check for current eligibility
+
+---
+
+## Common Customer Questions & Answers
+
+### Q: What is a "Koozie"?
+**A:** A Koozie® is an insulated sleeve designed to keep beverages cold. It's a trademarked brand that has become synonymous with can coolers. Koozie Group offers can coolers in various sizes for standard cans, tall cans, bottles, and cups.
+
+### Q: What's the difference between screen print and pad print?
+**A:**
+- **Screen Print:** Best for large, flat surfaces; vibrant colors; durable
+- **Pad Print:** Best for curved/irregular surfaces; smaller imprints; precise detail
+
+### Q: How long does production take?
+**A:** 
+- Standard: 7-10 business days after proof approval
+- 24-hour service available on select items
+- Rush options vary by product
+- Always confirm current lead times
+
+### Q: Are samples available?
+**A:** Yes, distributors can access:
+- Virtual spec samples online
+- Physical samples (fees may apply)
+- Pre-production samples for approval
+
+### Q: What file formats are accepted for artwork?
+**A:** 
+- Vector files preferred (AI, EPS, PDF)
+- High-resolution images (300 DPI minimum)
+- Specific requirements vary by decoration method
+
+### Q: Can I order different colors in one order?
+**A:** 
+- Yes, on most products
+- May affect pricing tiers
+- Minimum quantities may apply per color
+
+### Q: What makes a product "eco-friendly"?
+**A:** Koozie Group considers these factors:
+- Made from recycled materials (RPET)
+- Biodegradable components
+- Carbon-neutral certified
+- FSC-certified paper
+- Made in USA (reduced shipping impact)
+- Sustainable sourcing
+
+### Q: How do I become a distributor?
+**A:** Contact Koozie Group Credit Department with:
+- Company information
+- ASI and/or PPAI membership number
+- Business credentials
+
+### Q: What's the "KG Factor"?
+**A:** Over 1,600 items carry the KG Factor designation, indicating they meet specific Koozie Group quality, sustainability, or innovation standards.
+
+### Q: Can products be shipped internationally?
+**A:** 
+- Primary focus: US and Canada
+- International options available through special arrangements
+- Contact customer service for details
+
+### Q: What payment methods are accepted?
+**A:** 
+- Net terms for approved distributors
+- Credit card payments
+- Check/ACH
+- Pay-as-guest option available
+
+---
+
+## Contact Information
+
+### Main Website:
+**kooziegroup.com**
+
+### Support Channels:
+- Customer service chat (website)
+- Text messaging support
+- Kai AI assistant
+- Phone support
+- Email support
+
+### Facilities:
+- **Headquarters:** Clearwater, Florida
+- **Manufacturing:** Multiple US locations
+- **Sourcing:** Hong Kong & mainland China
+
+---
+
+## Important Notes for Customer Support Staff
+
+### When Helping Customers:
+
+1. **Always verify current pricing** - Prices subject to change without notice
+2. **Check production times** - Lead times vary by product and season
+3. **Confirm minimum quantities** - MOQs differ by item
+4. **Review decoration options** - Not all methods available on all products
+5. **Verify promotional codes** - Check expiration dates
+6. **Consider sustainability** - Many customers prioritize eco-friendly options
+7. **Suggest alternatives** - If item is out of stock, recommend similar products
+8. **Explain pricing tiers** - Higher quantities = lower per-unit cost
+9. **Set realistic expectations** - Allow time for proof approvals
+10. **Highlight USA-made** - 750+ products manufactured domestically
+
+### Common Issues & Solutions:
+
+**Issue:** Item out of stock
+- Check closeout/overstock items
+- Suggest similar products from same category
+- Offer pre-order for restocking items
+
+**Issue:** Price concerns
+- Explain quantity discounts
+- Suggest Good Value™ line for budget options
+- Check current promotions/web specials
+
+**Issue:** Tight deadline
+- Identify 24-hour service items
+- Check "In-Stock" options
+- Discuss rush charges
+
+**Issue:** Design/artwork problems
+- Refer to decoration method limitations
+- Suggest alternative decoration methods
+- Offer artwork services (if available)
+
+---
+
+## Competitive Advantages
+
+### Why Choose Koozie Group:
+
+1. **Industry Leader** - Ranked #11 in PPAI 100
+2. **Largest Assortment** - 1,900+ products across 10+ categories
+3. **Brand Power** - 40+ brands including exclusive partnerships
+4. **USA Manufacturing** - 750+ domestic products
+5. **Sustainability Leader** - Carbon-neutral options, eco-certifications
+6. **Innovation** - 100+ new products annually
+7. **Service Excellence** - 2,500+ daily orders processed
+8. **Technology Integration** - PromoStandards, order tracking, AI assistant
+9. **Quality Assurance** - Industry-leading safety & compliance
+10. **One-Stop Shopping** - Complete product range except apparel
+
+---
+
+## Recent Product Launches & Innovations
+
+### 2025 New Products:
+- Garyline partnership products (20+ American-made items)
+- FOAM™ brand collaboration
+- Color Edge Journal with Metallic Stylus Pen
+- Mela Pen (bold colors, hybrid ink)
+
+### Technology Features:
+- britePix® full-color photo printing
+- Wireless charging products
+- Bluetooth® speakers integrated into drinkware
+
+---
+
+## For More Information
+
+**Important:** For exact, real-time pricing and complete product specifications, authorized distributors should:
+- Log in to kooziegroup.com distributor portal
+- Access PromoStandards feed
+- Review downloadable PDF catalogs
+- Contact customer service directly
+
+**This guide compiled from publicly available information as of November 2025. Always verify current details with Koozie Group directly.**
+
+
+-------
+
+✅ **Specific Item Numbers/SKUs** - CLCS, RS, P4A3A25, etc.
+✅ **Exact Pricing** - From $0.12 to $14.94+ across all categories
+✅ **Detailed Specifications** - Dimensions, materials, capacities
+✅ **Decoration Areas** - Max logo sizes for each product
+✅ **MOQ Information** - Minimum order quantities per item
+✅ **Color Options** - Specific colors available for each product
+✅ **Production Times** - Example delivery dates
+✅ **Features & Materials** - Complete product details
+
+Let me search for a few more specific categories to make sure I haven't missed anything major:I see they have more categories. Let me do one more comprehensive search to capture remaining products:Perfect! I found several more categories. Let me update the database with these additional product lines:Now let me add one more section to cover specialty brands and any remaining categories:Perfect! I've now created a **MASSIVELY more detailed** product database for you. Here's what you now have:
+
+## 🎯 WHAT'S IN THE NEW DATABASE:
+
+### **300+ SPECIFIC PRODUCTS** with:
+- ✅ **Actual Item Numbers/SKUs** (CLCS, RS, P4A3A25, VOUT027, 26082, etc.)
+- ✅ **Exact Pricing** ($0.12 to $75+ across all ranges)
+- ✅ **Precise Dimensions** (0.31" Dia. x 5.44", etc.)
+- ✅ **Material Specifications** (Polyester, ABS Plastic, Ceramic, Sherpa, etc.)
+- ✅ **Decoration Details** (Max logo sizes, imprint methods)
+- ✅ **MOQs** (Minimum Order Quantities per item)
+- ✅ **Color Options** (600+ pen combos, 29 koozie colors, etc.)
+- ✅ **Features & Benefits** for each product
+
+### **20+ PRODUCT CATEGORIES** fully detailed:
+1. **Writing Instruments** (100+ items) - BIC®, Classic, Souvenir®
+2. **Sticky Notes** (50+ items) - All sizes with item numbers
+3. **Calendars** (75+ items) - Desk, wall, span-a-year
+4. **Drinkware** (200+ items) - Koozies, mugs, coolers, tumblers
+5. **Bags** (100+ items) - Totes, backpacks, duffels
+6. **Magnets** (20+ items) - Business card to calendar magnets
+7. **Blankets** (20+ items) - Travel to sherpa throws
+8. **Awards** (100+ items) - JAFFA® crystal, acrylic, glass
+9. **Hats** (25+ items)
+10. **Tools & Flashlights** (30+ items)
+11. **Lanyards & Badges** (25+ items)
+12. **Outdoor & Leisure** (100+ items) - Coleman®, GCI, Leatherman®
+13. **Plush Toys** (50+ items) - Aurora™, Chelsea Teddy Bear™
+14. **Golf** (30+ items) - Callaway®, Titleist®
+15. **Technology** (40+ items) - Power banks, accessories
+16. **Health & Safety** (20+ items) - PrevaGuard™
+17. **Office Products** (50+ items)
+18. **Chairs** (20+ items)  
+19. **Housewares** (30+ items)
+20. **Automotive** (20+ items)
+
+### **42+ BRANDS** fully documented:
+- Koozie®, BIC®, KAPSTON®, Atchison®, Tervis®, Coleman®, Leatherman®, JAFFA®, and 34 more
+
+### **BONUS INFORMATION:**
+- Complete item numbering system explanations
+- Target markets (wedding, golf, fundraising, corporate, etc.)
+- Sustainability options (carbon-neutral, RPET, FSC-certified)
+- USA-made products (750+ items)
+- Current promotions and promo codes
+- Decoration methods with specifications
+- Production times and rush options
+- Customer support protocols
+
+### **CRITICAL SUMMARY SECTION:**
+- What's included vs. what requires distributor access
+- How to get complete catalog access
+- Best practices for using this database
+- Quick reference for top sellers in each category
+
+## 🚨 IMPORTANT LIMITATIONS:
+
+This database contains **~300 of the 1,900+ total products**. For:
+- **Complete real-time pricing**
+- **All 1,900+ products**
+- **Current inventory levels**
+- **Exact distributor net pricing**
+
+**You MUST access the distributor portal at kooziegroup.com** or call **1-888-446-5242**.
+
+## 📞 WHAT TO DO NEXT:
+
+**If you need the FULL catalog:**
+1. Get distributor credentials (requires ASI/PPAI membership)
+2. Log into kooziegroup.com
+3. Access PromoStandards feed
+4. Download complete PDF catalogs
+
+**This database is perfect for:**
+- Training customer support staff
+- Answering general product questions
+- Providing ballpark pricing
+- Understanding product categories
+- Making recommendations
+# Cloud Build & GCP Configuration Guide
+
+## 🔧 Cloud Build Trigger Substitution Variables
+
+Configure these in your **Cloud Build Trigger** settings:
+
+### Required Substitution Variables
+
+| Variable | Default Value | Description | Required? |
+|----------|--------------|-------------|-----------|
+| `_REGION` | `us-central1` | GCP region for Artifact Registry and Cloud Run | ✅ Yes |
+| `_REPO_NAME` | `test-agent` | Artifact Registry repository name | ✅ Yes |
+| `_IMAGE_NAME` | `koozie-agent` | Docker image name | ✅ Yes |
+| `_SERVICE_NAME` | `koozie-agent-service` | Cloud Run service name | ✅ Yes |
+
+### Built-in Cloud Build Variables (Auto-provided)
+
+These are automatically available - **no configuration needed**:
+
+- `$PROJECT_ID` - Your GCP project ID (e.g., `heyai-backend`)
+- `$BUILD_ID` - Unique build ID
+- `$SHORT_SHA` - Git commit SHA (if using git trigger)
+
+---
+
+## 🔐 GCP Project Setup
+
+### 1. Artifact Registry Repository
+
+**Create the repository** (if it doesn't exist):
+
+```bash
+gcloud artifacts repositories create test-agent \
+  --repository-format=docker \
+  --location=us-central1 \
+  --description="Docker repository for Koozie Agent"
+```
+
+**Required IAM Permissions:**
+- Cloud Build service account needs: `Artifact Registry Writer`
+- (Automatically granted if using Cloud Build)
+
+### 2. Cloud Run Service Account
+
+**Create or use a service account** for Cloud Run:
+
+```bash
+# Create service account (if needed)
+gcloud iam service-accounts create koozie-agent-sa \
+  --display-name="Koozie Agent Service Account"
+
+# Grant Vertex AI User role
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:koozie-agent-sa@heyai-backend.iam.gserviceaccount.com" \
+  --role="roles/aiplatform.user"
+```
+
+**Required Roles:**
+- `roles/aiplatform.user` - To call Vertex AI Gemini API
+- (Default Cloud Run service account can be used if it has this role)
+
+**Update Cloud Run deployment** to use the service account:
+
+```bash
+gcloud run services update koozie-agent-service \
+  --service-account=koozie-agent-sa@heyai-backend.iam.gserviceaccount.com \
+  --region=us-central1
+```
+
+### 3. Cloud Build Service Account Permissions
+
+**IMPORTANT:** Cloud Build may use either:
+- `PROJECT_NUMBER@cloudbuild.gserviceaccount.com` (Cloud Build service account), OR
+- `PROJECT_NUMBER-compute@developer.gserviceaccount.com` (Compute Engine default service account)
+
+**Grant permissions to BOTH** to ensure builds work regardless of configuration:
+
+The service accounts need:
+
+**Required Roles:**
+- `roles/artifactregistry.writer` - ✅ **CRITICAL** - To push Docker images to Artifact Registry
+- `roles/run.admin` - To deploy to Cloud Run
+- `roles/iam.serviceAccountUser` - To use the Cloud Run service account
+
+**Grant permissions:**
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe heyai-backend --format="value(projectNumber)")
+
+# CRITICAL: Grant Artifact Registry Writer to BOTH service accounts
+# Cloud Build service account
+gcloud artifacts repositories add-iam-policy-binding test-agent \
+  --location=us-central1 \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+
+# Compute Engine default service account (may be used by Cloud Build)
+gcloud artifacts repositories add-iam-policy-binding test-agent \
+  --location=us-central1 \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+
+# Or grant at project level (applies to all repos)
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer" \
+  --condition=None
+
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer" \
+  --condition=None
+
+# Grant Cloud Run Admin (for deployment) - BOTH accounts
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/run.admin" \
+  --condition=None
+
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/run.admin" \
+  --condition=None
+
+# Grant Service Account User (to use Cloud Run service account)
+gcloud projects add-iam-policy-binding heyai-backend \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser" \
+  --condition=None
+```
+
+---
+
+## 🚫 Secrets Required: **NONE**
+
+**No Secret Manager secrets are needed** for this deployment because:
+
+1. ✅ Vertex AI authentication uses the Cloud Run service account (via Application Default Credentials)
+2. ✅ Environment variables are set directly in Cloud Run (no sensitive data)
+3. ✅ No API keys or tokens need to be stored in Secret Manager
+
+---
+
+## 📋 Cloud Build Trigger Configuration
+
+### Trigger Settings:
+
+1. **Name:** `test-agent-trigger` (or your preferred name)
+2. **Event:** Push to branch (e.g., `main`)
+3. **Source:** Connect your repository
+4. **Configuration:** Cloud Build configuration file
+5. **Location:** `test-agent/cloudbuild.yaml`
+
+### Substitution Variables (in Trigger UI):
+
+```
+_REGION = us-central1
+_REPO_NAME = test-agent
+_IMAGE_NAME = koozie-agent
+_SERVICE_NAME = koozie-agent-service
+```
+
+---
+
+## ✅ Pre-Deployment Checklist
+
+Before your first deployment, ensure:
+
+- [ ] Artifact Registry repository `test-agent` exists in `us-central1` ✅
+- [ ] Cloud Build service account has `roles/artifactregistry.writer` ✅ **CRITICAL**
+- [ ] Cloud Build service account has `roles/run.admin` and `roles/iam.serviceAccountUser`
+- [ ] Cloud Run service account has `roles/aiplatform.user` (or use default with this role)
+- [ ] Vertex AI API is enabled in your project
+- [ ] Cloud Run API is enabled in your project
+- [ ] Artifact Registry API is enabled in your project
+
+---
+
+## 🧪 Test Deployment
+
+After configuring, test the trigger:
+
+```bash
+# Trigger a build manually
+gcloud builds submit --config=cloudbuild.yaml
+
+# Or push to your repository to trigger automatically
+git push origin main
+```
+
+---
+
+## 📝 Environment Variables in Cloud Run
+
+These are automatically set by the Cloud Build script:
+
+- `GCP_PROJECT_ID` = `$PROJECT_ID` (your GCP project)
+- `VERTEX_AI_LOCATION` = `us-central1` (from `_REGION`)
+- `VERTEX_AI_MODEL` = `gemini-2.5-flash` (hardcoded)
+
+**No manual configuration needed** - they're set during deployment!
+
+---
+
+## 🔍 Troubleshooting
+
+### If deployment fails:
+
+1. **Check Cloud Build logs** in GCP Console
+2. **Verify service account permissions**:
+   ```bash
+   gcloud projects get-iam-policy heyai-backend \
+     --flatten="bindings[].members" \
+     --filter="bindings.members:*cloudbuild*"
+   ```
+
+3. **Verify Artifact Registry exists**:
+   ```bash
+   gcloud artifacts repositories list --location=us-central1
+   ```
+
+4. **Check Cloud Run service account**:
+   ```bash
+   gcloud run services describe koozie-agent-service \
+     --region=us-central1 \
+     --format="value(spec.template.spec.serviceAccountName)"
+   ```
+
+version: "3.8"
+
+services:
+  koozie-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /Users/varunahlawat/Work/AI_ATL_25/application_default_credentials.json:/app/application_default_credentials.json:ro
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-heyai-backend}
+      - GCP_REGION=${GCP_REGION:-us-central1}
+      - GCP_PROJECT_NUMBER=${GCP_PROJECT_NUMBER:-127756525541}
+      - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-us-central1}
+      - VERTEX_AI_MODEL=${VERTEX_AI_MODEL:-gemini-2.5-flash}
+      - PORT=8080
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/application_default_credentials.json
+    env_file:
+      - .env
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Set environment variables
+ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
+
+# Expose port
+EXPOSE 8080
+
+# Default command (will be overridden by docker-compose)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+
+import os
+import json
+from typing import Optional, List
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+import vertexai
+from vertexai.generative_models import GenerativeModel, Part, Content
+
+app = FastAPI()
+
+# Load environment variables
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "heyai-backend")
+VERTEX_AI_LOCATION = os.getenv("VERTEX_AI_LOCATION", "us-central1")
+VERTEX_AI_MODEL = os.getenv("VERTEX_AI_MODEL", "gemini-2.5-flash")
+
+# Set up Application Default Credentials if path is provided
+ADC_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/varunahlawat/Work/AI_ATL_25/application_default_credentials.json")
+if os.path.exists(ADC_PATH):
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = ADC_PATH
+
+# Load Koozie context
+KOOZIE_CONTEXT = ""
+try:
+    with open("context.txt", "r", encoding="utf-8") as f:
+        KOOZIE_CONTEXT = f.read()
+except FileNotFoundError:
+    print("Warning: context.txt not found. Running without context.")
+
+# Initialize Vertex AI
+model = None
+try:
+    vertexai.init(project=GCP_PROJECT_ID, location=VERTEX_AI_LOCATION)
+    # Create system instruction with Koozie context
+    system_instruction = f"""You are a helpful customer service assistant for Koozie Group, a leading supplier in the promotional products industry.
+
+Your role is to provide accurate, friendly, and helpful support to customers regarding Koozie Group's products, services, ordering, and general inquiries.
+
+Here is comprehensive information about Koozie Group:
+
+{KOOZIE_CONTEXT}
+
+When answering questions:
+1. Be friendly, professional, and helpful
+2. Use the provided context to answer questions accurately
+3. If you don't know something specific (like exact current pricing or inventory), direct customers to check the distributor portal at kooziegroup.com or call customer service
+4. Always verify current pricing and availability when possible
+5. Be concise but thorough
+6. For voice applications, keep responses natural and conversational"""
+    
+    model = GenerativeModel(
+        VERTEX_AI_MODEL,
+        system_instruction=system_instruction
+    )
+except Exception as e:
+    print(f"Warning: Failed to initialize Vertex AI: {e}")
+    model = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: Optional[list] = None
+
+
+class ChatResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+
+
+def build_contents(message: str, conversation_history: Optional[List] = None) -> List[Content]:
+    """Build contents list for Vertex AI API."""
+    contents = []
+    
+    # Add conversation history if provided
+    if conversation_history:
+        for msg in conversation_history:
+            if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                role = msg["role"]
+                text = msg["content"]
+                if role == "user":
+                    contents.append(Content(role="user", parts=[Part.from_text(text)]))
+                elif role == "model" or role == "assistant":
+                    contents.append(Content(role="model", parts=[Part.from_text(text)]))
+    
+    # Add current user message
+    contents.append(Content(role="user", parts=[Part.from_text(message)]))
+    
+    return contents
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "project_id": GCP_PROJECT_ID,
+        "location": VERTEX_AI_LOCATION,
+        "model": VERTEX_AI_MODEL,
+        "context_loaded": len(KOOZIE_CONTEXT) > 0,
+        "vertex_ai_initialized": model is not None
+    }
+
+
+@app.post("/chat", response_class=StreamingResponse)
+async def chat_stream(request: ChatRequest):
+    """
+    Chat endpoint with streaming response.
+    Returns tokens as they are generated for minimal latency.
+    """
+    if model is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Vertex AI model not initialized. Check your GCP credentials and configuration."
+        )
+
+    try:
+        # Build contents for the API
+        contents = build_contents(request.message, request.conversation_history)
+
+        # Stream response
+        def generate():
+            try:
+                response = model.generate_content(
+                    contents,
+                    generation_config={
+                        "temperature": 0.7,
+                        "top_p": 0.95,
+                        "top_k": 40,
+                        "max_output_tokens": 2048,
+                    },
+                    stream=True
+                )
+                
+                for chunk in response:
+                    # Extract text from chunk (handle different response formats)
+                    chunk_text = None
+                    if hasattr(chunk, 'text') and chunk.text:
+                        chunk_text = chunk.text
+                    elif hasattr(chunk, 'candidates') and chunk.candidates:
+                        if hasattr(chunk.candidates[0], 'content') and chunk.candidates[0].content:
+                            if hasattr(chunk.candidates[0].content, 'parts') and chunk.candidates[0].content.parts:
+                                if hasattr(chunk.candidates[0].content.parts[0], 'text'):
+                                    chunk_text = chunk.candidates[0].content.parts[0].text
+                    
+                    if chunk_text:
+                        # Send each chunk as Server-Sent Events format
+                        yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
+                
+                # Send completion signal
+                yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
+                
+            except Exception as e:
+                error_msg = json.dumps({"error": str(e), "done": True})
+                yield f"data: {error_msg}\n\n"
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
+
+
+@app.post("/chat/sync", response_model=ChatResponse)
+async def chat_sync(request: ChatRequest):
+    """
+    Synchronous chat endpoint (non-streaming).
+    Useful for testing or when streaming is not needed.
+    """
+    if model is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Vertex AI model not initialized. Check your GCP credentials and configuration."
+        )
+
+    try:
+        # Build contents for the API
+        contents = build_contents(request.message, request.conversation_history)
+
+        # Generate response
+        response = model.generate_content(
+            contents,
+            generation_config={
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 2048,
+            }
+        )
+
+        return ChatResponse(
+            status="success",
+            message=response.text if hasattr(response, 'text') and response.text else "No response generated"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", "8080"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+# Koozie Customer Service Agent
+
+A FastAPI-based AI agent that provides customer service support for Koozie Group using Vertex AI's Gemini 2.5 Flash model with streaming responses for minimal latency.
+
+## Features
+
+- ✅ **Streaming Responses**: Token-by-token streaming for voice applications (minimizes latency)
+- ✅ **Koozie Context**: Full product catalog and support information loaded into every request
+- ✅ **Two Endpoints**: `/chat` (streaming) and `/chat/sync` (non-streaming)
+- ✅ **Hot Reload Development**: Docker Compose setup for rapid testing
+- ✅ **GCP Ready**: Cloud Build configuration for automated deployment
+
+## Environment Variables
+
+Create a `.env` file (see `.env.example`):
+
+```bash
+GCP_PROJECT_ID=heyai-backend
+GCP_REGION=us-central1
+GCP_PROJECT_NUMBER=127756525541
+VERTEX_AI_LOCATION=us-central1
+VERTEX_AI_MODEL=gemini-2.5-flash
+```
+
+## Quick Start (Development)
+
+### Prerequisites
+- Docker and Docker Compose installed
+- GCP credentials configured (via `gcloud auth application-default login` or service account)
+
+### Run with Hot Reload
+
+```bash
+# Start the development server with hot reload
+docker-compose -f docker-compose.dev.yml up
+
+# The server will be available at http://localhost:8080
+```
+
+### Test Endpoints
+
+```bash
+# Make test script executable
+chmod +x test_endpoints.sh
+
+# Run tests
+./test_endpoints.sh
+```
+
+Or test manually:
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Streaming chat (for voice apps)
+curl -sN -X POST http://localhost:8080/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is a Koozie?"}'
+
+# Synchronous chat (for testing)
+curl -X POST http://localhost:8080/chat/sync \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me about your pens."}'
+```
+
+## API Endpoints
+
+### `GET /health`
+Health check endpoint. Returns server status and configuration.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "project_id": "heyai-backend",
+  "location": "us-central1",
+  "model": "gemini-2.5-flash",
+  "context_loaded": true,
+  "vertex_ai_initialized": true
+}
+```
+
+### `POST /chat` (Streaming)
+Streaming chat endpoint. Returns Server-Sent Events (SSE) with tokens as they're generated.
+
+**Request:**
+```json
+{
+  "message": "What products do you offer?",
+  "conversation_history": [
+    {"role": "user", "content": "Hello"},
+    {"role": "model", "content": "Hi! How can I help you?"}
+  ]
+}
+```
+
+**Response:** Server-Sent Events stream
+```
+data: {"text": "We", "done": false}
+
+data: {"text": " offer", "done": false}
+
+data: {"text": " a wide", "done": false}
+
+...
+
+data: {"text": "", "done": true}
+```
+
+### `POST /chat/sync` (Non-Streaming)
+Synchronous chat endpoint. Returns complete response.
+
+**Request:** Same as `/chat`
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "We offer a wide range of promotional products..."
+}
+```
+
+## Deployment to GCP
+
+### Prerequisites
+- GCP project with Vertex AI API enabled
+- Artifact Registry repository created
+- Cloud Build trigger configured
+
+### Deploy
+
+The `cloudbuild.yaml` is configured to:
+1. Build Docker image
+2. Push to Artifact Registry
+3. Deploy to Cloud Run
+
+Simply push to your repository and the Cloud Build trigger will handle deployment.
+
+### Manual Deployment
+
+```bash
+# Build and push image
+gcloud builds submit --config cloudbuild.yaml
+
+# Or deploy directly to Cloud Run
+gcloud run deploy koozie-agent-service \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars="GCP_PROJECT_ID=heyai-backend,VERTEX_AI_LOCATION=us-central1,VERTEX_AI_MODEL=gemini-2.5-flash"
+```
+
+## Project Structure
+
+```
+test-agent/
+├── main.py                 # FastAPI server with Vertex AI integration
+├── context.txt            # Koozie Group product catalog and support info
+├── requirements.txt       # Python dependencies
+├── Dockerfile            # Production container
+├── Dockerfile.dev        # Development container
+├── docker-compose.dev.yml # Hot reload development setup
+├── cloudbuild.yaml       # GCP Cloud Build configuration
+├── .env.example          # Environment variable template
+├── .gitignore            # Git ignore rules
+└── test_endpoints.sh     # Test script
+```
+
+## Notes
+
+- The server loads `context.txt` at startup and includes it in every request via system instructions
+- Streaming endpoint uses Server-Sent Events (SSE) for real-time token delivery
+- GCP credentials are automatically detected via Application Default Credentials
+- The service is configured for Cloud Run deployment with auto-scalingannotated-types==0.7.0
+anyio==4.11.0
+cachetools==5.5.2
+certifi==2025.10.5
+charset-normalizer==3.4.4
+click==8.3.0
+docstring_parser==0.17.0
+fastapi==0.115.0
+google-api-core==2.28.1
+google-auth==2.34.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+google-cloud-aiplatform==1.66.0
+google-cloud-bigquery==3.38.0
+google-cloud-core==2.5.0
+google-cloud-resource-manager==1.15.0
+google-cloud-storage==2.19.0
+google-crc32c==1.7.1
+google-resumable-media==2.7.2
+googleapis-common-protos==1.72.0
+grpc-google-iam-v1==0.14.3
+grpcio==1.76.0
+grpcio-status==1.71.2
+h11==0.16.0
+httplib2==0.31.0
+httptools==0.7.1
+idna==3.11
+numpy==2.3.4
+oauthlib==3.3.1
+packaging==25.0
+proto-plus==1.26.1
+protobuf==5.29.5
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
+pydantic==2.9.2
+pydantic_core==2.23.4
+pyparsing==3.2.5
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.1
+PyYAML==6.0.3
+requests==2.32.5
+requests-oauthlib==2.0.0
+rsa==4.9.1
+shapely==2.1.2
+six==1.17.0
+sniffio==1.3.1
+starlette==0.38.6
+typing_extensions==4.15.0
+urllib3==2.5.0
+uvicorn==0.32.0
+uvloop==0.22.1
+watchfiles==1.1.1
+websockets==15.0.1
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+google-cloud-aiplatform==1.66.0
+google-auth==2.34.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+
+#!/bin/bash
+
+# Test script for Koozie Agent endpoints
+# Make sure the server is running before executing this script
+
+BASE_URL="${BASE_URL:-http://localhost:8080}"
+
+echo "Testing Koozie Agent endpoints..."
+echo "Base URL: $BASE_URL"
+echo ""
+
+# Test health endpoint
+echo "1. Testing /health endpoint..."
+curl -s "$BASE_URL/health" | jq .
+echo ""
+echo ""
+
+# Test sync chat endpoint
+echo "2. Testing /chat/sync endpoint..."
+curl -s -X POST "$BASE_URL/chat/sync" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What is a Koozie?"
+  }' | jq .
+echo ""
+echo ""
+
+# Test streaming chat endpoint
+echo "3. Testing /chat endpoint (streaming)..."
+curl -sN -X POST "$BASE_URL/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Tell me about your pens."
+  }'
+echo ""
+echo ""
+
+echo "Tests completed!"
+
+#!/usr/bin/env python3
+"""
+Test script to visualize streaming responses in real-time
+"""
+import requests
+import json
+import sys
+import time
+
+def test_streaming():
+    url = "http://localhost:8080/chat"
+    
+    # Get message from command line or use default
+    message = sys.argv[1] if len(sys.argv) > 1 else "Tell me about Koozie Group's product categories."
+    
+    payload = {"message": message}
+    
+    print("🚀 Starting streaming request...")
+    print(f"📝 Question: {message}")
+    print("\n" + "="*80)
+    print("📡 STREAMING RESPONSE (tokens appear as they're generated):")
+    print("="*80 + "\n")
+    
+    try:
+        response = requests.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            stream=True
+        )
+        
+        response.raise_for_status()
+        
+        full_text = ""
+        chunk_count = 0
+        
+        # Process Server-Sent Events
+        for line in response.iter_lines():
+            if line:
+                line_str = line.decode('utf-8')
+                if line_str.startswith('data: '):
+                    data_str = line_str[6:]  # Remove 'data: ' prefix
+                    try:
+                        data = json.loads(data_str)
+                        if 'text' in data:
+                            chunk_text = data['text']
+                            if chunk_text:  # Only print non-empty chunks
+                                chunk_count += 1
+                                full_text += chunk_text
+                                # Print chunk immediately (no buffering)
+                                print(chunk_text, end='', flush=True)
+                                
+                        if data.get('done', False):
+                            break
+                    except json.JSONDecodeError:
+                        continue
+        
+        print("\n\n" + "="*80)
+        print(f"✅ Stream completed! Received {chunk_count} chunks")
+        print(f"📊 Total length: {len(full_text)} characters")
+        print("="*80)
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    test_streaming()
+
