@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   koozie-agent:
@@ -10,6 +10,7 @@ services:
     volumes:
       - .:/app
       - /app/__pycache__
+      - /Users/varunahlawat/Work/AI_ATL_25/application_default_credentials.json:/app/application_default_credentials.json:ro
     environment:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID:-heyai-backend}
       - GCP_REGION=${GCP_REGION:-us-central1}
@@ -17,8 +18,8 @@ services:
       - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-us-central1}
       - VERTEX_AI_MODEL=${VERTEX_AI_MODEL:-gemini-2.5-flash}
       - PORT=8080
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/application_default_credentials.json
     env_file:
       - .env
     restart: unless-stopped
     command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
-

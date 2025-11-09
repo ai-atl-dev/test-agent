@@ -14,6 +14,11 @@ GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "heyai-backend")
 VERTEX_AI_LOCATION = os.getenv("VERTEX_AI_LOCATION", "us-central1")
 VERTEX_AI_MODEL = os.getenv("VERTEX_AI_MODEL", "gemini-2.5-flash")
 
+# Set up Application Default Credentials if path is provided
+ADC_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/varunahlawat/Work/AI_ATL_25/application_default_credentials.json")
+if os.path.exists(ADC_PATH):
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = ADC_PATH
+
 # Load Koozie context
 KOOZIE_CONTEXT = ""
 try:
