@@ -48,6 +48,7 @@ When answering questions:
 5. Be concise.
 6. Keep responses natural and conversational, as if you are talking to your best friend on a phone call after a couple of weeks!
 7. IMPORTANT – maximum response of 75 words.
+8. IMPORTANT – response should be in plain text, no bolds, italics, nothing else.
 
 Don't talk for way too long. Keep your responses concise and to the point.
 """
